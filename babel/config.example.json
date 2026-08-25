@@ -1,0 +1,66 @@
+{
+  "_comment": "Edit this file, then run.bat. Run 'npm run processes' and 'npm run devices' to find the values below.",
+
+  "incoming": {
+    "enabled": true,
+    "source": "process",
+    "processName": "DayZ_x64.exe",
+    "targetLanguage": "en",
+    "playbackDevice": "",
+    "_playbackDeviceNote": "Empty = Windows default (your headphones). This is where you HEAR the translation."
+  },
+
+  "outgoing": {
+    "enabled": true,
+    "micDevice": "",
+    "_micDeviceNote": "Exact dshow name from 'npm run devices', e.g. 'Microphone (HyperX QuadCast)'",
+    "targetLanguage": "es",
+    "playbackDevice": "CABLE Input (VB-Audio Virtual Cable)",
+    "_playbackDeviceNote": "This is the virtual mic the game reads. Set the game's mic input to 'CABLE Output'."
+  },
+
+  "vad": {
+    "threshold": 0.5,
+    "minSpeechMs": 250,
+    "silenceHangoverMs": 400,
+    "maxUtteranceMs": 12000,
+    "preRollMs": 300
+  },
+
+  "whisper": {
+    "exe": "bin/whisper-cli.exe",
+    "model": "models/ggml-small.bin",
+    "threads": 8,
+    "extraArgs": ["-ng", "false"]
+  },
+
+  "translate": {
+    "backend": "llama",
+    "_backendNote": "'whisper' = free X->English only. 'llama' = local llama-server, any language pair, handles slang.",
+    "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+    "model": "local",
+    "timeoutMs": 4000
+  },
+
+  "tts": {
+    "exe": "bin/piper.exe",
+    "voices": {
+      "en": "models/en_US-lessac-medium.onnx",
+      "es": "models/es_ES-davefx-medium.onnx",
+      "pt": "models/pt_BR-faber-medium.onnx",
+      "ru": "models/ru_RU-dmitri-medium.onnx",
+      "de": "models/de_DE-thorsten-medium.onnx",
+      "fr": "models/fr_FR-siwis-medium.onnx"
+    }
+  },
+
+  "ffmpeg": {
+    "ffmpegExe": "bin/ffmpeg.exe",
+    "ffplayExe": "bin/ffplay.exe"
+  },
+
+  "debug": {
+    "keepTempWavs": false,
+    "logLevel": "info"
+  }
+}

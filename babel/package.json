@@ -1,0 +1,17 @@
+{
+  "name": "babel",
+  "version": "0.1.0",
+  "description": "Local real-time voice translation for game voice chat. No cloud, no paywall.",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "devices": "node src/index.js --list-devices",
+    "processes": "node src/index.js --list-processes"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "application-loopback": "^1.0.0",
+    "onnxruntime-node": "^1.19.2"
+  }
+}
