@@ -1,0 +1,6 @@
+node_modules/
+tmp/
+bin/*
+models/*
+!bin/.gitkeep
+!models/.gitkeep
