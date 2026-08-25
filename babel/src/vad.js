@@ -1,6 +1,5 @@
 'use strict';
 
-const ort = require('onnxruntime-node');
 const path = require('path');
 const { rms } = require('./audio');
 
@@ -14,6 +13,10 @@ const SAMPLE_RATE = 16000;
  * and emits complete utterances. Everything downstream only ever sees
  * speech, which matters a lot: whisper hallucinates confidently on
  * non-speech input (the infamous "Thanks for watching!" on a gunfight).
+ *
+ * onnxruntime is loaded lazily inside init() rather than at import time, so
+ * the diagnostic commands (--list-processes, --list-devices) work on a bare
+ * checkout with nothing installed yet.
  */
 class Vad {
   constructor(opts = {}) {
@@ -25,6 +28,7 @@ class Vad {
     this.preRollMs = opts.preRollMs ?? 300;
     this.minRms = opts.minRms ?? 0.004;
 
+    this.ort = null;
     this.session = null;
     this.state = null;
     this.inputNames = null;
@@ -40,7 +44,8 @@ class Vad {
   }
 
   async init() {
-    this.session = await ort.InferenceSession.create(this.modelPath);
+    this.ort = require('onnxruntime-node');
+    this.session = await this.ort.InferenceSession.create(this.modelPath);
     this.inputNames = this.session.inputNames;
     this._resetState();
   }
@@ -48,19 +53,19 @@ class Vad {
   _resetState() {
     // v5 uses a single combined 'state' [2,1,128]; v4 used separate h/c.
     if (this.inputNames.includes('state')) {
-      this.state = new ort.Tensor('float32', new Float32Array(2 * 1 * 128), [2, 1, 128]);
+      this.state = new this.ort.Tensor('float32', new Float32Array(2 * 1 * 128), [2, 1, 128]);
     } else {
       this.state = {
-        h: new ort.Tensor('float32', new Float32Array(2 * 1 * 64), [2, 1, 64]),
-        c: new ort.Tensor('float32', new Float32Array(2 * 1 * 64), [2, 1, 64]),
+        h: new this.ort.Tensor('float32', new Float32Array(2 * 1 * 64), [2, 1, 64]),
+        c: new this.ort.Tensor('float32', new Float32Array(2 * 1 * 64), [2, 1, 64]),
       };
     }
   }
 
   async _score(window) {
     const feeds = {
-      input: new ort.Tensor('float32', window, [1, window.length]),
-      sr: new ort.Tensor('int64', BigInt64Array.from([BigInt(SAMPLE_RATE)]), []),
+      input: new this.ort.Tensor('float32', window, [1, window.length]),
+      sr: new this.ort.Tensor('int64', BigInt64Array.from([BigInt(SAMPLE_RATE)]), []),
     };
 
     if (this.inputNames.includes('state')) {
