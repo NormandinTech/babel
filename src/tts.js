@@ -15,7 +15,7 @@ class Tts {
   constructor(cfg, tmpDir) {
     this.exe = cfg.exe;
     this.voices = cfg.voices || {};
-    this.tmpDir = tmpDir || path.join(os.tmpdir(), 'babble');
+    this.tmpDir = tmpDir || path.join(os.tmpdir(), 'babbel');
     fs.mkdirSync(this.tmpDir, { recursive: true });
   }
 

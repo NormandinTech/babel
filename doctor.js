@@ -7,7 +7,7 @@ const R = __dirname;
 const ok = s => console.log('  [ok]      ' + s);
 const bad = s => console.log('  [PROBLEM] ' + s);
 
-console.log('\n=== BABBLE DOCTOR ===\n');
+console.log('\n=== BABBEL DOCTOR ===\n');
 console.log('folder:', R, '\n');
 
 console.log('--- code version ---');
@@ -95,12 +95,12 @@ try {
 } catch (e) { bad('tasklist failed: ' + e.message); }
 
 console.log('\n--- last run log ---');
-const log = path.join(R, 'babble-log.txt');
+const log = path.join(R, 'babbel-log.txt');
 if (fs.existsSync(log)) {
   const lines = fs.readFileSync(log, 'utf8').trim().split(/\r?\n/);
   console.log('  (last 15 lines)');
   lines.slice(-15).forEach(l => console.log('   ' + l));
 } else {
-  console.log('  (no log yet - it is written the next time Babble runs)');
+  console.log('  (no log yet - it is written the next time Babbel runs)');
 }
 console.log('');

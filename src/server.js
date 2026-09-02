@@ -17,7 +17,7 @@ const PAGE = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Babble</title>
+<title>Babbel</title>
 <style>
   :root {
     --shell:      #141109;
@@ -176,7 +176,7 @@ const PAGE = `<!doctype html>
         <span class="word" id="powerWord">Off</span>
       </button>
       <div class="head-text">
-        <h1>Babble</h1>
+        <h1>Babbel</h1>
         <p id="status">Starting up</p>
         <p class="hint"><kbd id="keyname">Scroll Lock</kbd> toggles this without opening anything</p>
       </div>
@@ -213,7 +213,7 @@ const PAGE = `<!doctype html>
   </section>
 
   <p class="foot" id="foot"></p>
-  <p class="foot">Close this tab when you're done. Babble keeps running.</p>
+  <p class="foot">Close this tab when you're done. Babbel keeps running.</p>
 </main>
 
 <script>

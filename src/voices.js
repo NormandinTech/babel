@@ -7,7 +7,7 @@ const https = require('https');
 /**
  * Piper voice catalog and on-demand downloader.
  *
- * Whisper understands ~99 languages on the way in. What Babble can SPEAK is
+ * Whisper understands ~99 languages on the way in. What Babbel can SPEAK is
  * limited only by which voice files are on disk, so rather than ship gigabytes,
  * fetch one when it's wanted.
  *
@@ -72,7 +72,7 @@ function get(url, { json = false } = {}) {
   return new Promise((resolve, reject) => {
     const go = (u, n = 0) => {
       if (n > 5) return reject(new Error('too many redirects'));
-      https.get(u, { headers: { 'User-Agent': 'babble' } }, (res) => {
+      https.get(u, { headers: { 'User-Agent': 'babbel' } }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
           // HuggingFace redirects to a relative path (/api/resolve-cache/...),
@@ -171,7 +171,7 @@ function fetchTo(url, dest, onProgress) {
   return new Promise((resolve, reject) => {
     const go = (u, n = 0) => {
       if (n > 5) return reject(new Error('too many redirects'));
-      https.get(u, { headers: { 'User-Agent': 'babble' } }, (res) => {
+      https.get(u, { headers: { 'User-Agent': 'babbel' } }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
           return go(new URL(res.headers.location, u).href, n + 1);

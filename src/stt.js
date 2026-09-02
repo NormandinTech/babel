@@ -32,7 +32,7 @@ class Stt {
     this.extraArgs = cfg.extraArgs || [];
     this.noSpeechThold = cfg.noSpeechThold ?? 0.6;
     this.entropyThold = cfg.entropyThold ?? 2.6;
-    this.tmpDir = tmpDir || path.join(os.tmpdir(), 'babble');
+    this.tmpDir = tmpDir || path.join(os.tmpdir(), 'babbel');
     this.keepTemp = false;
     this.gpuChecked = false;
     fs.mkdirSync(this.tmpDir, { recursive: true });

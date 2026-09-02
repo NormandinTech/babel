@@ -1,9 +1,9 @@
 @echo off
-title Babble - voice translation
+title Babbel - voice translation
 cd /d "%~dp0"
 
 echo.
-echo   Babble - live voice translation
+echo   Babbel - live voice translation
 echo   ------------------------------
 echo.
 

@@ -1,4 +1,4 @@
-# Babble
+# Babbel
 
 Real-time voice translation for game voice chat. Runs entirely on your machine.
 No account, no API key, no paywall, nothing drawn on screen.
@@ -39,7 +39,7 @@ untouched. Alt works too.
 Settings open in your browser, not as an overlay on the game. That's deliberate:
 drawing over a running game means hooking the graphics API, which is exactly what
 anti-cheat looks for, and it doesn't work in exclusive fullscreen anyway. Alt-tab,
-change what you need, close the tab. Babble keeps running.
+change what you need, close the tab. Babbel keeps running.
 
 The hotkey reads key state rather than installing a keyboard hook - the same
 distinction. It never touches input on its way to the game.
@@ -60,7 +60,7 @@ node src\index.js --add-voice de
 node src\index.js --add-voice          (lists everything available)
 ```
 
-Each voice is a one-time ~60 MB download. Once it's in `models\`, Babble finds it
+Each voice is a one-time ~60 MB download. Once it's in `models\`, Babbel finds it
 automatically - no config editing.
 
 **One catch worth knowing.** Translating *into* English is free and local.
@@ -145,7 +145,7 @@ everything, including obvious speech. Measured here: plain 512 gave max
 probability 0.0034 on clear speech; 576-with-context gave 1.0000.
 
 **whisper.cpp falls back to CPU silently.** No warning, just 7 seconds per
-utterance instead of 500 ms. Babble now says which one it's using at startup.
+utterance instead of 500 ms. Babbel now says which one it's using at startup.
 
 ---
 

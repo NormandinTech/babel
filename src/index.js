@@ -102,7 +102,7 @@ function preflight(cfg, log) {
 async function main() {
   const args = process.argv.slice(2);
   const cfg = loadConfig();
-  const log = makeLogger(cfg.debug.logLevel, path.join(ROOT, 'babble-log.txt'));
+  const log = makeLogger(cfg.debug.logLevel, path.join(ROOT, 'babbel-log.txt'));
 
   if (args.includes('--list-processes')) {
     const list = ProcessCapture.listProcesses()

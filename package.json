@@ -1,5 +1,5 @@
 {
-  "name": "babble",
+  "name": "babbel",
   "version": "0.1.0",
   "description": "Local real-time voice translation for game voice chat. No cloud, no paywall.",
   "main": "src/index.js",
