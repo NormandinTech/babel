@@ -1,19 +1,24 @@
 'use strict';
 
-const ort = require('onnxruntime-node');
 const path = require('path');
 const { rms } = require('./audio');
 
-const WINDOW = 512;      // Silero v5 expects 512 samples @ 16 kHz
+const WINDOW = 512;        // chunk size Silero expects at 16 kHz
+const CONTEXT = 64;        // samples carried over from the previous chunk
 const SAMPLE_RATE = 16000;
 
 /**
  * Silero VAD + utterance segmenter.
  *
- * Feeds 512-sample windows to the ONNX model, tracks speech/silence state,
- * and emits complete utterances. Everything downstream only ever sees
- * speech, which matters a lot: whisper hallucinates confidently on
- * non-speech input (the infamous "Thanks for watching!" on a gunfight).
+ * IMPORTANT: Silero v5 does not take a bare 512-sample window. Its reference
+ * implementation prepends 64 samples of context from the previous chunk, so
+ * the model actually receives 576 samples. The ONNX input dimension is
+ * dynamic, so feeding it a plain 512 raises no error - it just returns
+ * ~0.001 for everything, including obvious speech. Measured on real audio:
+ * plain 512 gave max prob 0.0034; 576-with-context gave 1.0000.
+ *
+ * onnxruntime is loaded lazily inside init() so the diagnostic commands work
+ * on a bare checkout with nothing installed.
  */
 class Vad {
   constructor(opts = {}) {
@@ -25,63 +30,57 @@ class Vad {
     this.preRollMs = opts.preRollMs ?? 300;
     this.minRms = opts.minRms ?? 0.004;
 
+    this.ort = null;
     this.session = null;
     this.state = null;
     this.inputNames = null;
 
-    this.pending = new Float32Array(0);   // leftover < WINDOW
-    this.preRoll = [];                    // ring of recent windows
+    this.context = new Float32Array(CONTEXT);
+    this.pending = new Float32Array(0);
+    this.preRoll = [];
     this.preRollWindows = Math.ceil((this.preRollMs / 1000) * SAMPLE_RATE / WINDOW);
 
     this.inSpeech = false;
     this.current = [];
     this.silentWindows = 0;
     this.speechWindows = 0;
+    this.peakProb = 0;
   }
 
   async init() {
-    this.session = await ort.InferenceSession.create(this.modelPath);
+    this.ort = require('onnxruntime-node');
+    this.session = await this.ort.InferenceSession.create(this.modelPath);
     this.inputNames = this.session.inputNames;
     this._resetState();
   }
 
   _resetState() {
-    // v5 uses a single combined 'state' [2,1,128]; v4 used separate h/c.
-    if (this.inputNames.includes('state')) {
-      this.state = new ort.Tensor('float32', new Float32Array(2 * 1 * 128), [2, 1, 128]);
-    } else {
-      this.state = {
-        h: new ort.Tensor('float32', new Float32Array(2 * 1 * 64), [2, 1, 64]),
-        c: new ort.Tensor('float32', new Float32Array(2 * 1 * 64), [2, 1, 64]),
-      };
-    }
+    this.state = new this.ort.Tensor('float32', new Float32Array(2 * 1 * 128), [2, 1, 128]);
+    this.context = new Float32Array(CONTEXT);
   }
 
   async _score(window) {
-    const feeds = {
-      input: new ort.Tensor('float32', window, [1, window.length]),
-      sr: new ort.Tensor('int64', BigInt64Array.from([BigInt(SAMPLE_RATE)]), []),
-    };
+    // Build the 576-sample input: 64 samples of context + this 512 chunk.
+    const input = new Float32Array(CONTEXT + WINDOW);
+    input.set(this.context, 0);
+    input.set(window, CONTEXT);
 
-    if (this.inputNames.includes('state')) {
-      feeds.state = this.state;
-    } else {
-      feeds.h = this.state.h;
-      feeds.c = this.state.c;
-    }
-
-    const out = await this.session.run(feeds);
+    const out = await this.session.run({
+      input: new this.ort.Tensor('float32', input, [1, CONTEXT + WINDOW]),
+      state: this.state,
+      sr: new this.ort.Tensor('int64', BigInt64Array.from([BigInt(SAMPLE_RATE)]), []),
+    });
 
     if (out.stateN) this.state = out.stateN;
-    else if (out.hn && out.cn) this.state = { h: out.hn, c: out.cn };
 
-    const probTensor = out.output || out.probs || Object.values(out)[0];
-    return probTensor.data[0];
+    // Carry the tail of this chunk forward as the next chunk's context.
+    this.context = Float32Array.from(window.subarray(WINDOW - CONTEXT));
+
+    return out.output.data[0];
   }
 
   /**
-   * Push 16 kHz mono audio. Returns an array of completed utterances
-   * (Float32Array each). Usually empty; occasionally one.
+   * Push 16 kHz mono audio. Returns completed utterances (Float32Array each).
    */
   async push(samples) {
     const merged = new Float32Array(this.pending.length + samples.length);
@@ -100,6 +99,7 @@ class Vad {
       off += WINDOW;
 
       const prob = await this._score(win);
+      if (prob > this.peakProb) this.peakProb = prob;
       const voiced = prob >= this.threshold;
 
       if (!this.inSpeech) {
@@ -152,4 +152,4 @@ class Vad {
   }
 }
 
-module.exports = { Vad, WINDOW, SAMPLE_RATE };
+module.exports = { Vad, WINDOW, CONTEXT, SAMPLE_RATE };

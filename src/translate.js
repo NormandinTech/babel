@@ -3,13 +3,9 @@
 /**
  * Translation stage.
  *
- * Two backends:
- *   'whisper' — no-op here; whisper already produced English via -tr.
- *               Free, fastest, but English target only.
- *   'llama'   — POSTs to a local llama-server OpenAI-compatible endpoint.
- *               Any language pair, and it handles callouts and slang far
- *               better than a straight MT model ("push B" stays a command,
- *               not a sentence about shoving).
+ *   'whisper' - whisper's own -tr flag did the work. Free, fast, ENGLISH ONLY.
+ *   'llama'   - POST to a local llama-server. Any language pair, and it handles
+ *               callouts and slang far better than a literal MT model.
  */
 
 const LANG_NAMES = {
@@ -24,8 +20,8 @@ const SYSTEM_PROMPT = (target) => `You translate live voice chat from multiplaye
 Rules:
 - Output ONLY the translation. No quotes, no notes, no explanation.
 - Keep it short and spoken. This gets read aloud in a firefight.
-- Preserve gaming callouts as callouts. Map to the equivalent term players actually use in the target language rather than translating word by word.
-- Keep numbers, compass directions, and map/place names intact.
+- Preserve gaming callouts as callouts. Use the term players actually say in the target language rather than translating word by word.
+- Keep numbers, compass directions, and place names intact.
 - Profanity stays profanity. Do not soften it.
 - If the input is not intelligible speech, output exactly: [unclear]`;
 
@@ -35,26 +31,18 @@ class Translator {
     this.endpoint = cfg.endpoint;
     this.model = cfg.model || 'local';
     this.timeoutMs = cfg.timeoutMs || 4000;
+    this.warned = false;
   }
 
-  /**
-   * @param {string} text     source text
-   * @param {string} target   target language code
-   * @param {string} sourceLang  detected source (may be 'unknown')
-   * @returns {Promise<string|null>} null = drop this utterance
-   */
   async translate(text, target, sourceLang = 'unknown') {
     if (!text || !text.trim()) return null;
-
-    // Already in the target language — nothing to do.
     if (sourceLang && sourceLang !== 'unknown' && sourceLang === target) return text;
 
     if (this.backend === 'whisper') {
-      // whisper -tr already produced English. Anything else isn't supported here.
       if (target !== 'en') {
         throw new Error(
-          `translate.backend is 'whisper', which only outputs English. ` +
-          `Target '${target}' needs backend 'llama'.`
+          `translate.backend is 'whisper', which only produces English. ` +
+          `Target '${target}' needs backend 'llama' with a llama-server running.`
         );
       }
       return text;
@@ -83,16 +71,19 @@ class Translator {
         }),
       });
 
-      if (!res.ok) throw new Error(`llama-server ${res.status}`);
+      if (!res.ok) throw new Error(`llama-server returned ${res.status}`);
       const json = await res.json();
       const out = (json.choices?.[0]?.message?.content || '').trim();
 
       if (!out || out === '[unclear]') return null;
-      // Strip any wrapping quotes the model adds despite instructions.
       return out.replace(/^["'`]+|["'`]+$/g, '').trim();
     } catch (err) {
-      if (err.name === 'AbortError') {
-        throw new Error(`translation timed out after ${this.timeoutMs}ms`);
+      if (err.name === 'AbortError') throw new Error(`translation timed out after ${this.timeoutMs}ms`);
+      if (/fetch failed|ECONNREFUSED/i.test(err.message)) {
+        throw new Error(
+          `cannot reach llama-server at ${this.endpoint}. ` +
+          `Start it, or set translate.backend to "whisper" for English output.`
+        );
       }
       throw err;
     } finally {

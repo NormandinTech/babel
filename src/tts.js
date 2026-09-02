@@ -8,11 +8,8 @@ const os = require('os');
 let counter = 0;
 
 /**
- * Piper TTS. Standalone .exe, no Python — which is the whole reason it's the
- * default here. Someone you met in a lobby should be able to unzip and run.
- *
- * Swapping in Kokoro-82M later means replacing this class with a Python
- * sidecar; the interface (text -> wav path) stays identical.
+ * Piper TTS. Standalone exe, no Python - which is the point: someone you met
+ * in a lobby should be able to unzip and run.
  */
 class Tts {
   constructor(cfg, tmpDir) {
@@ -22,13 +19,20 @@ class Tts {
     fs.mkdirSync(this.tmpDir, { recursive: true });
   }
 
+  /** A voice counts only if the file is actually on disk. */
   hasVoice(lang) {
-    return Boolean(this.voices[lang]);
+    const v = this.voices[lang];
+    return Boolean(v) && fs.existsSync(v);
+  }
+
+  /** Languages we can actually speak right now. */
+  availableLanguages() {
+    return Object.keys(this.voices).filter(l => this.hasVoice(l));
   }
 
   async speak(text, lang) {
     const voice = this.voices[lang];
-    if (!voice) throw new Error(`No Piper voice configured for '${lang}'. Add one to config.json > tts.voices.`);
+    if (!voice) throw new Error(`No Piper voice configured for '${lang}'.`);
     if (!fs.existsSync(voice)) throw new Error(`Voice model missing: ${voice}`);
 
     const outPath = path.join(this.tmpDir, `tts-${Date.now()}-${counter++}.wav`);
@@ -50,19 +54,15 @@ class Tts {
 }
 
 /**
- * Playback to a NAMED device.
+ * Playback to a named device.
  *
- * This is the piece that makes the outgoing direction work at all: the
- * translated speech has to land on the virtual cable that the game reads
- * as its microphone, not on your headphones.
- *
- * ffplay uses SDL, and SDL picks its output device from SDL_AUDIODEVICE.
- * Crude, but it needs no native modules and no driver of your own.
+ * ffplay uses SDL, which picks its output from SDL_AUDIODEVICE. Crude, but it
+ * needs no native modules and no audio driver of our own.
  */
 class Player {
   constructor(ffplayExe) {
     this.ffplayExe = ffplayExe;
-    this.queues = new Map(); // device -> Promise chain, so clips never overlap
+    this.queues = new Map();     // device -> promise chain, so clips never overlap
   }
 
   play(wavPath, device = '', { deleteAfter = true } = {}) {

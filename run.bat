@@ -2,9 +2,30 @@
 title Babel - voice translation
 cd /d "%~dp0"
 
-REM Optional: uncomment to auto-start llama-server for non-English targets.
-REM start "llama-server" /min bin\llama-server.exe -m models\qwen2.5-3b-instruct-q4_k_m.gguf -c 2048 -ngl 99 --port 8080
-REM timeout /t 6 /nobreak >nul
+echo.
+echo   Babel - live voice translation
+echo   ------------------------------
+echo.
 
-node src\index.js
+where node >nul 2>&1
+if errorlevel 1 (
+  echo   Node.js is not installed. Get it from https://nodejs.org
+  echo.
+  pause
+  exit /b 1
+)
+
+if not exist node_modules (
+  echo   First run - installing dependencies...
+  echo.
+  call npm install
+  echo.
+)
+
+REM Live output on screen AND saved to babel-log.txt, in one step.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "node src\index.js 2>&1 | Tee-Object -FilePath 'babel-log.txt'"
+
+echo.
+echo   Stopped. This session was saved to babel-log.txt
+echo.
 pause

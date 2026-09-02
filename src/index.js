@@ -8,6 +8,7 @@ const { Stt } = require('./stt');
 const { Translator } = require('./translate');
 const { Tts, Player } = require('./tts');
 const { Direction } = require('./pipeline');
+const { detectSystemLanguage, VOICE_CATALOG } = require('./locale');
 
 const ROOT = path.join(__dirname, '..');
 const TMP = path.join(ROOT, 'tmp');
@@ -66,15 +67,15 @@ function preflight(cfg, log) {
   const targets = new Set();
   if (cfg.incoming.enabled) targets.add(cfg.incoming.targetLanguage);
   if (cfg.outgoing.enabled) targets.add(cfg.outgoing.targetLanguage);
+  // Only the languages actually in use need a voice on disk. The catalog lists
+  // many; missing ones are simply unavailable, not errors.
   for (const t of targets) {
+    if (!t) continue;
     const v = cfg.tts.voices[t];
     if (!v) problems.push(`no Piper voice configured for target language '${t}'`);
     else if (!fs.existsSync(v)) problems.push(`Piper voice missing for '${t}'  ->  ${v}`);
   }
 
-  if (cfg.outgoing.enabled && !cfg.outgoing.micDevice) {
-    problems.push(`outgoing.micDevice is empty — run 'npm run devices' and paste the exact name`);
-  }
 
   if (problems.length) {
     console.error('\nPreflight failed:\n');
@@ -91,9 +92,13 @@ async function main() {
   const log = makeLogger(cfg.debug.logLevel);
 
   if (args.includes('--list-processes')) {
-    const list = await ProcessCapture.listProcesses();
-    console.log('\nVisible windows (use the title or PID in config.json > incoming.processName):\n');
-    for (const w of list) console.log(`  ${String(w.processId).padStart(7)}  ${w.title}`);
+    const list = ProcessCapture.listProcesses()
+      .filter(p => p.memKb > 20000)
+      .sort((a, b) => b.memKb - a.memKb);
+    console.log('\nRunning processes by memory (put the name or PID in config.json > incoming.processName):\n');
+    for (const p of list.slice(0, 40)) {
+      console.log(`  ${String(p.pid).padStart(7)}  ${String(Math.round(p.memKb / 1024)).padStart(6)} MB  ${p.name}`);
+    }
     console.log('');
     return;
   }
@@ -101,9 +106,38 @@ async function main() {
   if (args.includes('--list-devices')) {
     const devices = await MicCapture.listDevices(cfg.ffmpeg.ffmpegExe);
     console.log('\nAudio input devices (for config.json > outgoing.micDevice):\n');
-    for (const d of devices) console.log(`  "${d}"`);
-    console.log('\nFor playback devices, open Windows Sound settings — use the exact device name.\n');
+    if (!devices.length) {
+      console.log('  (none found)\n');
+      console.log('  Windows may be blocking microphone access, or no recording device is enabled.');
+      console.log('  Check: Settings > Privacy & security > Microphone > "Let desktop apps access your microphone"');
+      console.log('  And:   Win+R -> mmsys.cpl -> Recording tab -> right-click -> Show Disabled Devices\n');
+    } else {
+      for (const d of devices) console.log(`  "${d}"`);
+      console.log('');
+    }
     return;
+  }
+
+  // Blank targetLanguage means "use whatever language this computer is set to".
+  // Lets someone unzip and run without editing anything.
+  if (!cfg.incoming.targetLanguage) {
+    const detected = detectSystemLanguage();
+    if (cfg.tts.voices[detected]) {
+      cfg.incoming.targetLanguage = detected;
+      log.info(`system language detected: ${detected}`);
+    } else {
+      cfg.incoming.targetLanguage = 'en';
+      const known = VOICE_CATALOG[detected];
+      log.warn(
+        known
+          ? `system language is '${detected}' but no voice is installed - using English. ` +
+            `Download ${known.file}.onnx (+ .onnx.json) into models\\ and add it to tts.voices.`
+          : `system language '${detected}' has no Piper voice available - using English.`
+      );
+    }
+  }
+  if (cfg.outgoing.enabled && !cfg.outgoing.targetLanguage) {
+    cfg.outgoing.targetLanguage = 'en';
   }
 
   preflight(cfg, log);
@@ -121,22 +155,37 @@ async function main() {
   if (cfg.incoming.enabled) {
     directions.push(new Direction({
       name: 'in ',
-      capture: new ProcessCapture({ processName: cfg.incoming.processName }),
+      capture: new ProcessCapture({
+        processName: cfg.incoming.processName,
+        source: cfg.incoming.source,
+      }),
       vadCfg: cfg.vad,
       stt, translator, tts, player, log,
       targetLanguage: cfg.incoming.targetLanguage,
       playbackDevice: cfg.incoming.playbackDevice,
+      speakSameLanguage: cfg.incoming.speakSameLanguage === true,
+      repeatWindowMs: (cfg.filters && cfg.filters.repeatWindowMs) || 45000,
+      maxAgeMs: (cfg.filters && cfg.filters.maxAgeMs) || 8000,
     }));
   }
 
   if (cfg.outgoing.enabled) {
-    directions.push(new Direction({
+    let mic = cfg.outgoing.micDevice;
+    if (!mic) {
+      mic = await MicCapture.autoDevice(cfg.ffmpeg.ffmpegExe);
+      if (mic) log.info(`auto-selected mic: ${mic}`);
+      else log.warn('no microphone found - outgoing direction disabled');
+    }
+    if (mic) directions.push(new Direction({
       name: 'out',
-      capture: new MicCapture({ device: cfg.outgoing.micDevice, ffmpegExe: cfg.ffmpeg.ffmpegExe }),
+      capture: new MicCapture({ device: mic, ffmpegExe: cfg.ffmpeg.ffmpegExe }),
       vadCfg: cfg.vad,
       stt, translator, tts, player, log,
       targetLanguage: cfg.outgoing.targetLanguage,
       playbackDevice: cfg.outgoing.playbackDevice,
+      speakSameLanguage: true,
+      repeatWindowMs: (cfg.filters && cfg.filters.repeatWindowMs) || 45000,
+      maxAgeMs: (cfg.filters && cfg.filters.maxAgeMs) || 8000,
     }));
   }
 
@@ -145,15 +194,37 @@ async function main() {
     process.exit(1);
   }
 
+  let started = 0;
   for (const d of directions) {
     try {
       await d.start();
+      started++;
     } catch (err) {
       log.warn(`could not start ${d.name.trim()}: ${err.message}`);
     }
   }
 
-  console.log('\nRunning. Ctrl+C to stop.\n');
+  if (started === 0) {
+    console.error('\nNothing is listening - every enabled direction failed to start.');
+    console.error('Fix the errors above, or set incoming.source to "system" to capture all desktop audio.\n');
+    process.exit(1);
+  }
+
+  console.log(`\nRunning (${started}/${directions.length} direction(s) active). Ctrl+C to stop.\n`);
+
+  // Whisper falls back to CPU silently. Say so once, loudly - it is a 10x difference.
+  const gpuWatch = setInterval(() => {
+    if (stt.gpuChecked) {
+      clearInterval(gpuWatch);
+      if (stt.gpuStatus === 'cpu') {
+        log.warn('whisper is running on CPU, not GPU - expect ~10x slower transcription.');
+        log.warn('check that the CUDA DLLs are in bin\\ and whisper.extraArgs is empty.');
+      } else {
+        log.info('whisper is using the GPU');
+      }
+    }
+  }, 1000);
+  if (gpuWatch.unref) gpuWatch.unref();
 
   const shutdown = () => {
     console.log('\nstopping...');

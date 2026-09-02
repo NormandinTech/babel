@@ -1,115 +1,114 @@
 # Babel
 
-Real-time voice translation for game voice chat. Runs entirely on your machine. No account, no API key, no paywall.
+Real-time voice translation for game voice chat. Runs entirely on your machine.
+No account, no API key, no paywall, nothing drawn on screen.
 
-You hear teammates in your language. They hear you in theirs. Nothing is drawn on screen.
+You hear other players in your language. Confirmed working in DayZ.
 
 ---
 
 ## How it works
 
 ```
-GAME AUDIO  --> per-process loopback --> VAD --> whisper --> translate --> Piper --> your headphones
-YOUR MIC    --> ffmpeg dshow         --> VAD --> whisper --> translate --> Piper --> VB-CABLE --> game mic
+GAME AUDIO --> WASAPI loopback --> VAD --> language check --> whisper --> Piper --> your headphones
+YOUR MIC   --> ffmpeg dshow    --> VAD --> whisper --> translate --> Piper --> VB-CABLE --> game mic
 ```
 
-The game process is never touched. Audio is read through a Windows OS API
-(`AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK`) — no injection, no memory reads, no overlay
-hooking. Nothing here is the kind of thing anti-cheat looks for.
+The game process is never touched. Audio is read through a Windows OS API - no
+injection, no memory reads, no overlay hooking.
 
 ---
 
-## What you need
+## Zero configuration
 
-**Hardware:** an NVIDIA GPU makes this usable. CPU-only works but adds 1–2 seconds.
-**Headphones are required.** On speakers, the translated audio feeds back into your mic and loops.
+Out of the box, with nothing edited:
 
-### Getting the binaries
+- **Any game.** It captures all desktop audio, so it doesn't know or care what
+  you're running. DayZ, CoD, Discord, a browser - same behaviour.
+- **Any incoming language.** Whisper detects it per utterance. There is no
+  source-language setting to get wrong.
+- **Your language.** `targetLanguage` is blank by default, which means "use
+  whatever this computer is set to." A German player gets German if the voice is
+  installed, English otherwise, with a note saying which file to download.
 
-Drop these into `bin\` and `models\`:
-
-| File | Where | Notes |
-|---|---|---|
-| `whisper-cli.exe` + DLLs | `bin\` | whisper.cpp release, **CUDA build**. Older releases call it `main.exe` — rename it. |
-| `ggml-small.bin` | `models\` | whisper.cpp model. Start with `small`; try `medium` if accuracy is rough. |
-| `silero_vad.onnx` | `models\` | From the snakers4/silero-vad repo. |
-| `piper.exe` + DLLs | `bin\` | Piper release for Windows x64. |
-| `*.onnx` + `*.onnx.json` voices | `models\` | One per target language. |
-| `ffmpeg.exe`, `ffplay.exe` | `bin\` | Any Windows FFmpeg build. |
-| `llama-server.exe` + a GGUF | `bin\`, `models\` | Only if you want non-English targets. |
-
-### VB-CABLE (outgoing only)
-
-Windows has no built-in virtual microphone, and shipping one means a signed kernel driver.
-So: install VB-CABLE (free), then in the game set **microphone input = `CABLE Output`**.
-
-Your real voice no longer reaches teammates — only the translation does. That is intended.
-
----
+Everything below is for people who want to change that.
 
 ## Setup
 
-```
-setup.bat
-npm run devices        REM copy your mic name
-npm run processes      REM with the game running, copy the title
-```
+1. Install Node.js from nodejs.org
+2. Put the binaries in place (see below)
+3. Double-click `run.bat`
 
-Edit `config.json`, then:
+### Binaries
 
-```
-run.bat
-```
+| File | Goes in | Source |
+|---|---|---|
+| `whisper-cli.exe` + CUDA DLLs | `bin\` | whisper.cpp releases, **cublas** build |
+| `ggml-small.bin` | `models\` | HuggingFace ggerganov/whisper.cpp |
+| `silero_vad.onnx` | `models\` | snakers4/silero-vad |
+| `piper.exe` + `espeak-ng-data` | `bin\piper\` | rhasspy/piper 2023.11.14-2 |
+| voice `.onnx` + `.onnx.json` | `models\` | rhasspy/piper-voices |
+| `ffmpeg.exe`, `ffplay.exe` | `bin\` | gyan.dev builds |
 
----
+`get-deps.ps1` fetches most of these automatically.
 
-## config.json, briefly
+### Windows settings that matter
 
-- `incoming.processName` — substring of the game window title, or a raw PID
-- `incoming.targetLanguage` — what **you** want to hear
-- `outgoing.targetLanguage` — what **they** hear
-- `outgoing.playbackDevice` — must be `CABLE Input (VB-Audio Virtual Cable)`
-- `translate.backend` — `whisper` is free and fast but **English output only**. Use `llama` for anything else.
-
-### Tuning the VAD
-
-If it triggers on gunfire, raise `vad.threshold` toward `0.7`.
-If it clips the start of words, raise `vad.preRollMs`.
-If it cuts people off mid-sentence, raise `vad.silenceHangoverMs`.
+- **Turn off exclusive mode.** `mmsys.cpl` > Playback > your device > Advanced >
+  uncheck "Allow applications to take exclusive control." Games grab the device
+  otherwise and loopback captures silence.
+- **Check your mic level.** `mmsys.cpl` > Recording > Levels. A mic at -46 dB is
+  below the VAD floor and nothing will ever trigger.
+- Headphones required. On speakers the output feeds back into the input.
 
 ---
 
-## Expected latency
+## Tuning
 
-Roughly 1.2–2.5s from end-of-speech to audio, on a modern NVIDIA card with `small`.
-The timing breakdown prints on every line so you can see which stage is the problem.
+Everything lives in `config.json`.
 
-Realistically: fine for "there's a guy in the red building," too slow for "grenade."
+| Symptom | Fix |
+|---|---|
+| Triggers on gunfire | raise `vad.threshold` toward 0.85 |
+| Misses quiet speech | lower `vad.threshold`, or raise the Windows mic level |
+| Clips the first word | raise `vad.preRollMs` |
+| Cuts people off | raise `vad.silenceHangoverMs` |
+| Repeats a phrase forever | it's a hallucination; add it to `HALLUCINATIONS` in `src/stt.js` |
+| Slow (`stt` over 2000 ms) | GPU isn't engaged - `whisper.extraArgs` must be `[]` |
+| Wrong words on names/slang | switch to `ggml-medium.bin` |
+
+`logLevel: "debug"` shows filtered and skipped utterances.
+
+---
+
+## Two things that will waste your evening if you don't know them
+
+**Silero VAD needs 576 samples, not 512.** It takes a 512-sample chunk plus 64
+samples of context carried from the previous chunk. The ONNX input dimension is
+dynamic, so feeding a bare 512 raises no error - it just returns ~0.001 for
+everything, including obvious speech. Measured here: plain 512 gave max
+probability 0.0034 on clear speech; 576-with-context gave 1.0000.
+
+**whisper.cpp falls back to CPU silently.** No warning, just 7 seconds per
+utterance instead of 500 ms. Babel now says which one it's using at startup.
 
 ---
 
 ## Known limits
 
-- **Windows 10 build 2004+ only.** Per-process loopback doesn't exist before that.
-- **In-game VOIP arrives mixed with game audio.** Works, but noisier than Discord. If the game
-  offers a separate voice-chat output device, use it and point Babel at that device instead.
-- **Exclusive-mode audio blocks loopback.** Uncheck exclusive mode in Windows sound settings.
-- **Whisper hallucinates on noise.** VAD plus a filter list catches most of it; some gets through.
-- **Overlapping speakers get mangled.** No diarisation. Two people talking at once produces one garbled line.
-
----
+- Windows 10 build 2004+ only
+- In-game VOIP arrives mixed with gunfire; noisier than Discord
+- Whisper hallucinates on music and ambient noise; filtered but not perfectly
+- No diarisation - two people talking at once produces one garbled line
+- Non-English output needs llama-server running on :8080
 
 ## Roadmap
 
-- [ ] Push-to-talk for the outgoing direction (`node-global-key-listener`)
-- [ ] DeepFilterNet or RNNoise pass before VAD, for in-game VOIP
-- [ ] Kokoro-82M as a TTS option (better quality, needs a Python sidecar)
-- [ ] Optional captions on `localhost` for a second monitor or phone
-- [ ] Portable build so it's one unzip for someone you just met
-
----
+- [ ] Push-to-talk for the outgoing direction
+- [ ] DeepFilterNet before the VAD, for gunfire
+- [ ] Portable build - one unzip, no Node install
 
 ## License
 
-MIT. Model and binary licenses are separate — whisper.cpp is MIT, Piper's active fork is
-GPL-3.0, Silero VAD is MIT. Check them before you do anything commercial with this.
+MIT. Bundled binaries keep their own licenses: whisper.cpp MIT, Silero MIT,
+Piper 2023.11 MIT, ffmpeg GPL.

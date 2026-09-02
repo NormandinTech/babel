@@ -1,66 +1,84 @@
 {
-  "_comment": "Edit this file, then run.bat. Run 'npm run processes' and 'npm run devices' to find the values below.",
-
+  "_comment": "Edit this, then run.bat. Use 'node src/index.js --list-devices' and '--list-processes' to find values.",
   "incoming": {
     "enabled": true,
-    "source": "process",
+    "source": "system",
+    "_sourceNote": "'system' = all desktop audio, works with ANY game, no setup. 'process' = one app only.",
     "processName": "DayZ_x64.exe",
-    "targetLanguage": "en",
+    "targetLanguage": "",
+    "speakSameLanguage": false,
+    "_speakSameLanguageNote": "false = stay silent when they already speak your language. Leave false.",
     "playbackDevice": "",
-    "_playbackDeviceNote": "Empty = Windows default (your headphones). This is where you HEAR the translation."
+    "_playbackDeviceNote": "Empty = Windows default (your headphones). Where you HEAR translations.",
+    "_targetLanguageNote": "Leave EMPTY to use this computer's language automatically. Or set a code: en, es, de, ru, pt, fr..."
   },
-
   "outgoing": {
-    "enabled": true,
+    "enabled": false,
     "micDevice": "",
-    "_micDeviceNote": "Exact dshow name from 'npm run devices', e.g. 'Microphone (HyperX QuadCast)'",
+    "_micDeviceNote": "Empty = auto-pick. Or paste an exact name from --list-devices.",
     "targetLanguage": "es",
+    "_targetNote": "Anything other than 'en' needs translate.backend = 'llama' and a running llama-server.",
     "playbackDevice": "CABLE Input (VB-Audio Virtual Cable)",
-    "_playbackDeviceNote": "This is the virtual mic the game reads. Set the game's mic input to 'CABLE Output'."
+    "_playbackDeviceNote": "The virtual mic the game reads. Set the game's mic input to 'CABLE Output'."
   },
-
   "vad": {
-    "threshold": 0.5,
+    "threshold": 0.7,
+    "_thresholdNote": "0.5 quiet rooms, 0.7 games, 0.85 heavy gunfire. Higher = fewer false triggers.",
     "minSpeechMs": 250,
     "silenceHangoverMs": 400,
-    "maxUtteranceMs": 12000,
-    "preRollMs": 300
+    "maxUtteranceMs": 6000,
+    "preRollMs": 300,
+    "minRms": 0.004,
+    "_minRmsNote": "Utterances quieter than this are discarded before whisper sees them."
   },
-
+  "filters": {
+    "repeatWindowMs": 45000,
+    "_repeatNote": "Same text inside this window is dropped. Kills hallucination loops.",
+    "maxAgeMs": 8000,
+    "_maxAgeNote": "Utterances older than this are dropped rather than spoken late."
+  },
   "whisper": {
     "exe": "bin/whisper-cli.exe",
     "model": "models/ggml-small.bin",
+    "_modelNote": "ggml-medium.bin is far more accurate on names and slang, but ~3x slower.",
     "threads": 8,
-    "extraArgs": ["-ng", "false"]
+    "noSpeechThold": 0.6,
+    "entropyThold": 2.6,
+    "extraArgs": [],
+    "_extraArgsNote": "LEAVE EMPTY. Adding '-ng' disables the GPU and makes everything ~10x slower."
   },
-
   "translate": {
-    "backend": "llama",
-    "_backendNote": "'whisper' = free X->English only. 'llama' = local llama-server, any language pair, handles slang.",
+    "backend": "whisper",
+    "_backendNote": "'whisper' = free, local, ENGLISH OUTPUT ONLY. 'llama' = any language, needs llama-server on :8080.",
     "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
     "model": "local",
     "timeoutMs": 4000
   },
-
   "tts": {
-    "exe": "bin/piper.exe",
+    "exe": "bin/piper/piper.exe",
     "voices": {
       "en": "models/en_US-lessac-medium.onnx",
       "es": "models/es_ES-davefx-medium.onnx",
       "pt": "models/pt_BR-faber-medium.onnx",
       "ru": "models/ru_RU-dmitri-medium.onnx",
       "de": "models/de_DE-thorsten-medium.onnx",
-      "fr": "models/fr_FR-siwis-medium.onnx"
-    }
+      "fr": "models/fr_FR-siwis-medium.onnx",
+      "it": "models/it_IT-riccardo-x_low.onnx",
+      "pl": "models/pl_PL-darkman-medium.onnx",
+      "tr": "models/tr_TR-dfki-medium.onnx",
+      "nl": "models/nl_NL-mls-medium.onnx",
+      "uk": "models/uk_UA-ukrainian_tts-medium.onnx",
+      "zh": "models/zh_CN-huayan-medium.onnx"
+    },
+    "_voicesNote": "Only files that actually exist are used. Missing ones are ignored unless that language is your target."
   },
-
   "ffmpeg": {
     "ffmpegExe": "bin/ffmpeg.exe",
     "ffplayExe": "bin/ffplay.exe"
   },
-
   "debug": {
     "keepTempWavs": false,
-    "logLevel": "info"
+    "logLevel": "info",
+    "_logLevelNote": "'debug' shows filtered and skipped utterances too."
   }
 }

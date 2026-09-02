@@ -4,7 +4,7 @@
  * Audio helpers.
  *
  * Everything downstream (Silero VAD, whisper.cpp) wants 16 kHz mono float32.
- * WASAPI hands us 48 kHz stereo float32. This module bridges that gap.
+ * loopback-capture hands us 48 kHz stereo 16-bit. This module bridges that gap.
  */
 
 /** Build a windowed-sinc lowpass FIR. cutoff is normalised to the INPUT rate. */
@@ -20,7 +20,6 @@ function makeLowpass(taps, cutoffNorm) {
     } else {
       v = Math.sin(2 * Math.PI * cutoffNorm * n) / (Math.PI * n);
     }
-    // Hamming window
     v *= 0.54 - 0.46 * Math.cos((2 * Math.PI * i) / M);
     h[i] = v;
     sum += v;
@@ -31,13 +30,12 @@ function makeLowpass(taps, cutoffNorm) {
 
 /**
  * Integer-factor decimator with persistent filter state.
- * Anti-alias filters before throwing samples away — skip the filter and
+ * Anti-alias filters before throwing samples away - skip the filter and
  * gunfire above 8 kHz folds down into the speech band as garbage.
  */
 class Decimator {
   constructor(factor, taps = 63) {
     this.factor = factor;
-    // Cut just under the output Nyquist (16000/2 = 8000), with a little margin.
     this.h = makeLowpass(taps, 0.95 / (2 * factor));
     this.history = new Float32Array(taps - 1);
     this.phase = 0;
@@ -49,7 +47,6 @@ class Decimator {
     const hist = this.history;
     const total = hist.length + input.length;
 
-    // Working buffer = history + new input
     const buf = new Float32Array(total);
     buf.set(hist, 0);
     buf.set(input, hist.length);
@@ -61,7 +58,6 @@ class Decimator {
       for (let k = 0; k < taps; k++) acc += buf[i + k] * h[k];
       out.push(acc);
     }
-    // Carry the tail forward so the next block filters continuously.
     const consumed = i;
     const keep = total - consumed;
     this.history = buf.slice(total - Math.min(keep, taps - 1));
@@ -92,6 +88,17 @@ function bufferToFloat32(buf) {
   return out;
 }
 
+/**
+ * Raw PCM Buffer (little-endian signed 16-bit) -> Float32Array in [-1, 1].
+ * This is what loopback-capture emits: 16-bit, stereo, 48 kHz.
+ */
+function bufferInt16ToFloat32(buf) {
+  const n = Math.floor(buf.length / 2);
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = buf.readInt16LE(i * 2) / 32768;
+  return out;
+}
+
 /** Float32Array (16 kHz mono) -> 16-bit PCM WAV Buffer. */
 function encodeWav(samples, sampleRate = 16000) {
   const dataLen = samples.length * 2;
@@ -101,13 +108,13 @@ function encodeWav(samples, sampleRate = 16000) {
   buf.writeUInt32LE(36 + dataLen, 4);
   buf.write('WAVE', 8);
   buf.write('fmt ', 12);
-  buf.writeUInt32LE(16, 16);        // PCM chunk size
-  buf.writeUInt16LE(1, 20);         // format = PCM
-  buf.writeUInt16LE(1, 22);         // channels
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20);
+  buf.writeUInt16LE(1, 22);
   buf.writeUInt32LE(sampleRate, 24);
-  buf.writeUInt32LE(sampleRate * 2, 28); // byte rate
-  buf.writeUInt16LE(2, 32);         // block align
-  buf.writeUInt16LE(16, 34);        // bits per sample
+  buf.writeUInt32LE(sampleRate * 2, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
   buf.write('data', 36);
   buf.writeUInt32LE(dataLen, 40);
 
@@ -118,11 +125,13 @@ function encodeWav(samples, sampleRate = 16000) {
   return buf;
 }
 
-/** Rough loudness check — used to drop segments that are almost certainly not speech. */
+/** Rough loudness check - used to drop segments that are almost certainly not speech. */
 function rms(samples) {
   let acc = 0;
   for (let i = 0; i < samples.length; i++) acc += samples[i] * samples[i];
   return Math.sqrt(acc / samples.length);
 }
 
-module.exports = { Decimator, downmixToMono, bufferToFloat32, encodeWav, rms };
+module.exports = {
+  Decimator, downmixToMono, bufferToFloat32, bufferInt16ToFloat32, encodeWav, rms,
+};
