@@ -22,10 +22,11 @@ if not exist node_modules (
   echo.
 )
 
-REM Live output on screen AND saved to babel-log.txt, in one step.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "node src\index.js 2>&1 | Tee-Object -FilePath 'babel-log.txt'"
+REM Run node directly so Ctrl+C reaches it. Piping through PowerShell would
+REM put another process between you and the app, and it eats the interrupt.
+node src\index.js
 
 echo.
-echo   Stopped. This session was saved to babel-log.txt
+echo   Stopped.
 echo.
 pause

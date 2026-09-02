@@ -19,6 +19,61 @@ injection, no memory reads, no overlay hooking.
 
 ---
 
+## Using it
+
+Double-click `run.bat`. It runs in the background. Nothing is drawn on screen.
+
+| Key | Does |
+|---|---|
+| **Scroll Lock** | turn translation on or off |
+| **Shift + Scroll Lock** | open settings - language, live captions |
+
+Scroll Lock is the default because no game binds it. Change it in `config.json`
+under `hotkey.toggleKey`.
+
+The modifier is Shift rather than Ctrl for a hardware reason: the keyboard
+controller turns Ctrl+Scroll Lock into Break before Windows sees a Scroll Lock
+press at all, so nothing watching that key can ever fire. Shift passes through
+untouched. Alt works too.
+
+Settings open in your browser, not as an overlay on the game. That's deliberate:
+drawing over a running game means hooking the graphics API, which is exactly what
+anti-cheat looks for, and it doesn't work in exclusive fullscreen anyway. Alt-tab,
+change what you need, close the tab. Babel keeps running.
+
+The hotkey reads key state rather than installing a keyboard hook - the same
+distinction. It never touches input on its way to the game.
+
+The settings page also shows live captions, so you can leave it on a second
+monitor or a phone if you want to read along.
+
+## Languages
+
+**Understanding people: ~99 languages, nothing to set up.** Whisper detects and
+transcribes whatever it hears. There is no source-language setting.
+
+**Speaking to you: 34 languages.** English and Spanish ship installed. Add any
+other from settings (Shift + Scroll Lock), or from the command line:
+
+```
+node src\index.js --add-voice de
+node src\index.js --add-voice          (lists everything available)
+```
+
+Each voice is a one-time ~60 MB download. Once it's in `models\`, Babel finds it
+automatically - no config editing.
+
+**One catch worth knowing.** Translating *into* English is free and local.
+Translating into anything else needs `llama-server` running on port 8080, because
+whisper can only translate to English. So:
+
+| You want | Needs |
+|---|---|
+| Any language -> English | nothing, works out of the box |
+| Any language -> German, Russian, etc. | a Piper voice + llama-server |
+
+Set `translate.backend` to `"llama"` for the second case.
+
 ## Zero configuration
 
 Out of the box, with nothing edited:

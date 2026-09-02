@@ -80,5 +80,16 @@
     "keepTempWavs": false,
     "logLevel": "info",
     "_logLevelNote": "'debug' shows filtered and skipped utterances too."
+  },
+  "panel": {
+    "port": 7331,
+    "_note": "Settings page, opened with Ctrl+the toggle key. Nothing is shown until you ask for it. Set panel to false to disable."
+  },
+  "hotkey": {
+    "toggleKey": "scroll lock",
+    "menuModifier": "shift",
+    "_note": "Press the key to toggle translation. Hold the modifier and press it to open settings.",
+    "_modifierNote": "'shift' or 'alt'. NOT 'ctrl' - the keyboard turns Ctrl+Scroll Lock into Break, so the key press never arrives.",
+    "_keyNote": "Options: scroll lock, pause, insert, home, end, right ctrl, num lock, numpad 0-9, f13-f16. Set hotkey to false to disable."
   }
 }

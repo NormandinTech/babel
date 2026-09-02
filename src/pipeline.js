@@ -35,6 +35,8 @@ class Direction {
     this.busy = 0;
     this.maxQueue = 2;
     this.spoken = new Map();
+    this.paused = false;
+    this.onCaption = null;
   }
 
   async start() {
@@ -53,6 +55,7 @@ class Direction {
   }
 
   _enqueue(utterance) {
+    if (this.paused) return;
     if (this.busy >= this.maxQueue) {
       this.log.debug(`[${this.name}] busy, dropping utterance`);
       return;
@@ -150,7 +153,16 @@ class Direction {
       `mt ${tMt - tStt} tts ${tTts - tMt})`
     );
 
+    if (this.onCaption) {
+      this.onCaption({ from: srcLang, text: translated });
+    }
+
     await this.player.play(wav, this.playbackDevice);
+  }
+
+  setTarget(lang) {
+    this.targetLanguage = lang;
+    this.spoken.clear();
   }
 
   stop() {
