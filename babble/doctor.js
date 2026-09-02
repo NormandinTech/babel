@@ -54,10 +54,7 @@ try {
   console.log('  log level        :', c.debug.logLevel);
 
   if (c.translate.backend === 'llama') bad('backend is "llama" - needs a server on :8080. Use "whisper" for English.');
-  // Blank means "use the system language", resolved at startup - not a problem.
-  if (!c.incoming.targetLanguage) {
-    ok('incoming target: auto (uses this computer\'s language)');
-  } else if (c.incoming.targetLanguage !== 'en' && c.translate.backend === 'whisper') {
+  if (c.incoming.targetLanguage !== 'en' && c.translate.backend === 'whisper') {
     bad(`incoming target "${c.incoming.targetLanguage}" needs llama backend`);
   }
   const piper = path.isAbsolute(c.tts.exe) ? c.tts.exe : path.join(R, c.tts.exe);
@@ -65,15 +62,6 @@ try {
 } catch (e) {
   bad('config.json unreadable: ' + e.message);
 }
-
-console.log('\n--- installed voices ---');
-try {
-  const voices = require('./src/voices');
-  const list = voices.listVoices(R).filter(v => v.installed);
-  if (list.length) list.forEach(v => ok(v.name));
-  else bad('no voices installed - run: node src/index.js --add-voice en');
-  console.log(`  (${Object.keys(voices.CATALOG).length} more available)`);
-} catch (e) { bad('voice catalog unreadable: ' + e.message); }
 
 console.log('\n--- node modules ---');
 for (const m of ['loopback-capture', 'onnxruntime-node']) {
@@ -101,6 +89,6 @@ if (fs.existsSync(log)) {
   console.log('  (last 15 lines)');
   lines.slice(-15).forEach(l => console.log('   ' + l));
 } else {
-  console.log('  (no log yet - it is written the next time Babble runs)');
+  bad('babble-log.txt does not exist - run.bat has not produced a log yet');
 }
 console.log('');
